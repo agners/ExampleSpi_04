@@ -132,10 +132,10 @@ void ToggleTask(void *pvParameters)
 	struct rpmsg_channel *app_chnl = NULL;
 	int len;
 	void *tx_buf;
+	char str_buffer[256];
+	uint32_t sequence = 0;
 	unsigned long size;
-	AnalogData_t localAnalogDataRead;
-	char buff = '\n';
-	msgData_t msgData;
+
 	/* Print the initial banner */
 	PRINTF("\r\nRPMSG String Echo FreeRTOS RTOS API Demo...\r\n");
 
@@ -144,10 +144,8 @@ void ToggleTask(void *pvParameters)
 	result = rpmsg_rtos_init(0 /*REMOTE_CPU_ID*/, &rdev, RPMSG_MASTER, &app_chnl);
 	assert(result == 0);
 	PRINTF("Name service handshake is done, M4 has setup a rpmsg channel [%d ---> %d]\r\n", app_chnl->src, app_chnl->dst);
-	int index = 0;
 
 
-	AnalogData_t localAnalogData;
 	PRINTF("\n\rToggleTask\n\r");
 	RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
 	NVIC_DisableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
@@ -161,45 +159,21 @@ void ToggleTask(void *pvParameters)
 			continue;
 
 		GPIO_Ctrl_ToggleLed0();
-
-		memset(&localAnalogData, 0xAA, sizeof(AnalogData_t));
-		circBufPush(&cb, localAnalogData);
-
-		circBufPop(&cb, &localAnalogDataRead, &index);
-		memcpy(&msgData.analogData, &localAnalogDataRead, sizeof(msgData_t));
-		msgData.index = index;
-		msgData.index = msgData.index+11;
-
+		sequence++;
+		len = snprintf(str_buffer, sizeof(str_buffer), "%lu,%d,%d\n",
+			 sequence, 1234, 4321);
 
 		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
 		if(tx_buf == NULL)
 		{
 			PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+			continue;
 		}
-		assert(tx_buf);
 
-
-		len = sizeof(msgData_t);
 		/* Copy string to RPMsg tx buffer */
-		memcpy(tx_buf, &msgData, sizeof(msgData_t));
-		/* Echo back received message with nocopy send */
-		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, sizeof(msgData_t), app_chnl->dst);
-		if(result != 0)
-		{
-			PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
-		}
-		assert(result == 0);
+		memcpy(tx_buf, str_buffer, len);
 
-		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
-		if(tx_buf == NULL)
-		{
-			PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
-		}
-		assert(tx_buf);
-
-		len = sizeof(buff);
-		memcpy(tx_buf, &buff, len);
-		/* Echo back received message with nocopy send */
+		/* Send message... */
 		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, len, app_chnl->dst);
 		if(result != 0)
 		{
