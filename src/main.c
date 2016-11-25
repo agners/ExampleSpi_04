@@ -127,100 +127,96 @@ int circBufPop(circBuf_t *c, AnalogData_t *data, int * index)
 ******************************************************************************/
 void ToggleTask(void *pvParameters)
 {
-
-    int result;
-    struct remote_device *rdev = NULL;
-    struct rpmsg_channel *app_chnl = NULL;
-    int len;
-    void *tx_buf;
-    unsigned long size;
+	int result;
+	struct remote_device *rdev = NULL;
+	struct rpmsg_channel *app_chnl = NULL;
+	int len;
+	void *tx_buf;
+	unsigned long size;
 	AnalogData_t localAnalogDataRead;
 	char buff = '\n';
 	msgData_t msgData;
-    /* Print the initial banner */
-    PRINTF("\r\nRPMSG String Echo FreeRTOS RTOS API Demo...\r\n");
+	/* Print the initial banner */
+	PRINTF("\r\nRPMSG String Echo FreeRTOS RTOS API Demo...\r\n");
 
-    /* RPMSG Init as REMOTE */
-    PRINTF("RPMSG Init as Remote\r\n");
-    result = rpmsg_rtos_init(0 /*REMOTE_CPU_ID*/, &rdev, RPMSG_MASTER, &app_chnl);
-    assert(result == 0);
-    PRINTF("Name service handshake is done, M4 has setup a rpmsg channel [%d ---> %d]\r\n", app_chnl->src, app_chnl->dst);
-  	int index = 0;
+	/* RPMSG Init as REMOTE */
+	PRINTF("RPMSG Init as Remote\r\n");
+	result = rpmsg_rtos_init(0 /*REMOTE_CPU_ID*/, &rdev, RPMSG_MASTER, &app_chnl);
+	assert(result == 0);
+	PRINTF("Name service handshake is done, M4 has setup a rpmsg channel [%d ---> %d]\r\n", app_chnl->src, app_chnl->dst);
+	int index = 0;
 
 
 	AnalogData_t localAnalogData;
-    PRINTF("\n\rToggleTask\n\r");
-    RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
+	PRINTF("\n\rToggleTask\n\r");
+	RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
 	NVIC_DisableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
 	GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
 	GPIO_SetPinIntMode(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin, true);
 	NVIC_EnableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
-    RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
-    do
-	{
-//______________________________________   0 us
-	    if (pdTRUE == xSemaphoreTake(xSemaphore, portMAX_DELAY))
-	    {
-//______________________________________   0 us
-	    	GPIO_Ctrl_ToggleLed0();
+	RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
 
-	    	memset(&localAnalogData, 0xAA, sizeof(AnalogData_t));
-	    	circBufPush(&cb, localAnalogData);
+	while (1) {
+		if (xSemaphoreTake(xSemaphore, portMAX_DELAY) == pdFALSE)
+			continue;
 
-	    	circBufPop(&cb, &localAnalogDataRead, &index);
-	    	memcpy(&msgData.analogData, &localAnalogDataRead, sizeof(msgData_t));
-	    	msgData.index = index;
-	    	msgData.index = msgData.index+11;
+		GPIO_Ctrl_ToggleLed0();
 
+		memset(&localAnalogData, 0xAA, sizeof(AnalogData_t));
+		circBufPush(&cb, localAnalogData);
 
-	    	tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
-	    	if(tx_buf == NULL)
-	    	{
-	    		PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
-	    	}
-	    	assert(tx_buf);
+		circBufPop(&cb, &localAnalogDataRead, &index);
+		memcpy(&msgData.analogData, &localAnalogDataRead, sizeof(msgData_t));
+		msgData.index = index;
+		msgData.index = msgData.index+11;
 
 
-	    	len = sizeof(msgData_t);
-	    	/* Copy string to RPMsg tx buffer */
-	    	memcpy(tx_buf, &msgData, sizeof(msgData_t));
-	    	/* Echo back received message with nocopy send */
-	    	result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, sizeof(msgData_t), app_chnl->dst);
-	    	if(result != 0)
-	    	{
-	    		PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
-	    	}
-	    	assert(result == 0);
-
-	    	tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
-	    	if(tx_buf == NULL)
-	    	{
-	    		PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
-	    	}
-	    	assert(tx_buf);
-
-	    	len = sizeof(buff);
-	    	memcpy(tx_buf, &buff, len);
-	    	/* Echo back received message with nocopy send */
-	    	result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, len, app_chnl->dst);
-	    	if(result != 0)
-	    	{
-	    		PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
-	    	}
-	    	assert(result == 0);
+		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
+		if(tx_buf == NULL)
+		{
+			PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+		}
+		assert(tx_buf);
 
 
-	        RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
-	    	GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
-	    	GPIO_SetPinIntMode(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin, true);
-	        GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
-	    	NVIC_EnableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
-	    	RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
+		len = sizeof(msgData_t);
+		/* Copy string to RPMsg tx buffer */
+		memcpy(tx_buf, &msgData, sizeof(msgData_t));
+		/* Echo back received message with nocopy send */
+		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, sizeof(msgData_t), app_chnl->dst);
+		if(result != 0)
+		{
+			PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
+		}
+		assert(result == 0);
 
-//______________________________________  1152us
-	    	GPIO_Ctrl_ToggleLed0();
-	    }
-	} while (1);
+		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
+		if(tx_buf == NULL)
+		{
+			PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+		}
+		assert(tx_buf);
+
+		len = sizeof(buff);
+		memcpy(tx_buf, &buff, len);
+		/* Echo back received message with nocopy send */
+		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, len, app_chnl->dst);
+		if(result != 0)
+		{
+			PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
+		}
+		assert(result == 0);
+
+
+		RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
+		GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
+		GPIO_SetPinIntMode(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin, true);
+		GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
+		NVIC_EnableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
+		RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
+
+		GPIO_Ctrl_ToggleLed0();
+	}
 }
 
 ///******************************************************************************
