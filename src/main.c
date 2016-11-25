@@ -57,6 +57,13 @@ typedef struct
 	uint8_t data[24];
 }AnalogData_t;
 
+
+typedef struct
+{
+    int index;
+	AnalogData_t analogData;
+}msgData_t;
+
 typedef struct
 {
 	AnalogData_t * const analogData;
@@ -120,6 +127,27 @@ int circBufPop(circBuf_t *c, AnalogData_t *data, int * index)
 ******************************************************************************/
 void ToggleTask(void *pvParameters)
 {
+
+    int result;
+    struct remote_device *rdev = NULL;
+    struct rpmsg_channel *app_chnl = NULL;
+    int len;
+    void *tx_buf;
+    unsigned long size;
+	AnalogData_t localAnalogDataRead;
+	char buff = '\n';
+	msgData_t msgData;
+    /* Print the initial banner */
+    PRINTF("\r\nRPMSG String Echo FreeRTOS RTOS API Demo...\r\n");
+
+    /* RPMSG Init as REMOTE */
+    PRINTF("RPMSG Init as Remote\r\n");
+    result = rpmsg_rtos_init(0 /*REMOTE_CPU_ID*/, &rdev, RPMSG_MASTER, &app_chnl);
+    assert(result == 0);
+    PRINTF("Name service handshake is done, M4 has setup a rpmsg channel [%d ---> %d]\r\n", app_chnl->src, app_chnl->dst);
+  	int index = 0;
+
+
 	AnalogData_t localAnalogData;
     PRINTF("\n\rToggleTask\n\r");
     RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
@@ -130,87 +158,150 @@ void ToggleTask(void *pvParameters)
     RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
     do
 	{
+//______________________________________   0 us
 	    if (pdTRUE == xSemaphoreTake(xSemaphore, portMAX_DELAY))
 	    {
+//______________________________________   0 us
 	    	GPIO_Ctrl_ToggleLed0();
+
+	    	memset(&localAnalogData, 0xAA, sizeof(AnalogData_t));
+	    	circBufPush(&cb, localAnalogData);
+
+	    	circBufPop(&cb, &localAnalogDataRead, &index);
+	    	memcpy(&msgData.analogData, &localAnalogDataRead, sizeof(msgData_t));
+	    	msgData.index = index;
+	    	msgData.index = msgData.index+11;
+
+
+	    	tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
+	    	if(tx_buf == NULL)
+	    	{
+	    		PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+	    	}
+	    	assert(tx_buf);
+
+
+	    	len = sizeof(msgData_t);
+	    	/* Copy string to RPMsg tx buffer */
+	    	memcpy(tx_buf, &msgData, sizeof(msgData_t));
+	    	/* Echo back received message with nocopy send */
+	    	result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, sizeof(msgData_t), app_chnl->dst);
+	    	if(result != 0)
+	    	{
+	    		PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
+	    	}
+	    	assert(result == 0);
+
+	    	tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
+	    	if(tx_buf == NULL)
+	    	{
+	    		PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+	    	}
+	    	assert(tx_buf);
+
+	    	len = sizeof(buff);
+	    	memcpy(tx_buf, &buff, len);
+	    	/* Echo back received message with nocopy send */
+	    	result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, len, app_chnl->dst);
+	    	if(result != 0)
+	    	{
+	    		PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
+	    	}
+	    	assert(result == 0);
+
+
 	        RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
 	    	GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
 	    	GPIO_SetPinIntMode(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin, true);
 	        GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
 	    	NVIC_EnableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
-	        RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
-	        memset(&localAnalogData, 0xAA, sizeof(AnalogData_t));
-	        circBufPush(&cb, localAnalogData);
-	        GPIO_Ctrl_ToggleLed0();
+	    	RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
+
+//______________________________________  1152us
+	    	GPIO_Ctrl_ToggleLed0();
 	    }
 	} while (1);
 }
 
-/******************************************************************************
-*
-* Function Name: SwitchTask
-* Comments: this task is used to change blinking frequency.
-*
-******************************************************************************/
-void SwitchTask(void *pvParameters)
-{
-    int result;
-    struct remote_device *rdev = NULL;
-    struct rpmsg_channel *app_chnl = NULL;
-    void *rx_buf;
-    int len;
-    void *tx_buf;
-    unsigned long size;
-	AnalogData_t localAnalogDataRead;
-	char buff[200];
-    /* Print the initial banner */
-    PRINTF("\r\nRPMSG String Echo FreeRTOS RTOS API Demo...\r\n");
-
-    /* RPMSG Init as REMOTE */
-    PRINTF("RPMSG Init as Remote\r\n");
-    result = rpmsg_rtos_init(0 /*REMOTE_CPU_ID*/, &rdev, RPMSG_MASTER, &app_chnl);
-    assert(result == 0);
-
-    PRINTF("Name service handshake is done, M4 has setup a rpmsg channel [%d ---> %d]\r\n", app_chnl->src, app_chnl->dst);
-
-
-    while (true)
-    {
-
-    	memset(buff, 0, sizeof(buff));
-    	int index = 0;
-    	GPIO_Ctrl_ToggleLed1();
-    	char ret = circBufPop(&cb, &localAnalogDataRead, &index);
-    	if(ret == 0)
-    	{
-
-    		sprintf(buff, "%d", index);
-    		for(int i=0; i < 24; i++)
-    		{
-    			sprintf(buff, "%s;%hhu", buff, localAnalogDataRead.data[i]);
-    		}
-    		sprintf(buff, "%sEND\n", buff);
-    		/* Get tx buffer from RPMsg */
-    		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
-    		assert(tx_buf);
-
-    		len = strlen(buff);
-    		/* Copy string to RPMsg tx buffer */
-    		memcpy(tx_buf, buff, len);
-    		/* Echo back received message with nocopy send */
-    		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, len, app_chnl->dst);
-    		assert(result == 0);
-
-    		vTaskDelay(0);
-    		GPIO_Ctrl_ToggleLed1();
-    	}
-    	else
-    	{
-    		vTaskDelay(configTICK_RATE_HZ);
-    		GPIO_Ctrl_ToggleLed1();
-    	}
-    }
-}
+///******************************************************************************
+//*
+//* Function Name: SwitchTask
+//* Comments: this task is used to change blinking frequency.
+//*
+//******************************************************************************/
+//void SwitchTask(void *pvParameters)
+//{
+//    int result;
+//    struct remote_device *rdev = NULL;
+//    struct rpmsg_channel *app_chnl = NULL;
+//    int len;
+//    void *tx_buf;
+//    unsigned long size;
+//	AnalogData_t localAnalogDataRead;
+//	char buff[200];
+//	msgData_t msgData;
+//    /* Print the initial banner */
+//    PRINTF("\r\nRPMSG String Echo FreeRTOS RTOS API Demo...\r\n");
+//
+//    /* RPMSG Init as REMOTE */
+//    PRINTF("RPMSG Init as Remote\r\n");
+//    result = rpmsg_rtos_init(0 /*REMOTE_CPU_ID*/, &rdev, RPMSG_MASTER, &app_chnl);
+//    assert(result == 0);
+//    PRINTF("Name service handshake is done, M4 has setup a rpmsg channel [%d ---> %d]\r\n", app_chnl->src, app_chnl->dst);
+//  	int index = 0;
+//    while (true)
+//    {
+//
+//    	memset(buff, 0, sizeof(buff));
+//    	GPIO_Ctrl_ToggleLed1();
+//    	while(circBufPop(&cb, &localAnalogDataRead, &index) == 0)
+//    	{
+//    		memcpy(&msgData.analogData, &localAnalogDataRead, sizeof(msgData_t));
+//    		msgData.index = index;
+//    		msgData.index = msgData.index+11;
+//    		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
+//    		if(tx_buf == NULL)
+//    		{
+//        	    PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+//    		}
+//    		assert(tx_buf);
+//
+//    		len = sizeof(msgData_t);
+//    		/* Copy string to RPMsg tx buffer */
+//    		memcpy(tx_buf, &msgData, sizeof(msgData_t));
+//    		/* Echo back received message with nocopy send */
+////    	    PRINTF("\r\n Index = %d\r\n", msgData.index);
+//    		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, sizeof(msgData_t), app_chnl->dst);
+//    		if(result != 0)
+//    		{
+//            	    PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
+//    		}
+//    		assert(result == 0);
+//
+//
+//    		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
+//    		if(tx_buf == NULL)
+//    		{
+//        	    PRINTF("\r\n ERROR = rpmsg_rtos_alloc_tx_buffer\r\n");
+//    		}
+//    		assert(tx_buf);
+//
+//    		/* Copy string to RPMsg tx buffer */
+//    		sprintf(buff, "\n");
+//    		len = strlen(buff);
+//    		memcpy(tx_buf, buff, len);
+//    		/* Echo back received message with nocopy send */
+//    		result = rpmsg_rtos_send_nocopy(app_chnl->rp_ept, tx_buf, len, app_chnl->dst);
+//    		if(result != 0)
+//    		{
+//            	    PRINTF("\r\n ERROR = rpmsg_rtos_send_nocopy\r\n");
+//    		}
+//    		assert(result == 0);
+//    	}
+//    	vTaskDelay(configTICK_RATE_HZ);
+//    	GPIO_Ctrl_ToggleLed1();
+//    }
+//}
 
 /*
  * MU Interrrupt ISR
@@ -234,7 +325,7 @@ int main(void)
 {
     /* hardware initialiize, include RDC, IOMUX, Uart debug initialize */
     hardware_init();
-    PRINTF("\n\r====================== GPIO Example ========================\n\r");
+    PRINTF("\n\r====================== GPIO Example 04 ========================\n\r");
 
     /* GPIO module initialize, configure "LED" as output and button as interrupt mode. */
     GPIO_Ctrl_Init();
@@ -252,10 +343,10 @@ int main(void)
 
 
     /* Create a the APP main task. */
-    xTaskCreate(ToggleTask, "Toggle Task", configMINIMAL_STACK_SIZE + 100,
+    xTaskCreate(ToggleTask, "Toggle Task", configMINIMAL_STACK_SIZE + 300,
                 NULL, tskIDLE_PRIORITY+4, NULL);
-    xTaskCreate(SwitchTask, "Switch Task", configMINIMAL_STACK_SIZE + 100,
-                NULL, tskIDLE_PRIORITY+1, NULL);
+//    xTaskCreate(SwitchTask, "Switch Task", configMINIMAL_STACK_SIZE + 100,
+//                NULL, tskIDLE_PRIORITY+1, NULL);
 
     /* Start FreeRTOS scheduler. */
     vTaskStartScheduler();

@@ -106,19 +106,21 @@ void GPIO_Ctrl_Init()
     RDC_SEMAPHORE_Unlock(BOARD_GPIO_LED1_RDC_PDAP);
 }
 
+static bool onLed0 = 1;
+
 void GPIO_Ctrl_ToggleLed0()
 {
-    static bool on = false;
+
 
 #ifdef BOARD_GPIO_LED0_CONFIG
     RDC_SEMAPHORE_Lock(BOARD_GPIO_LED0_RDC_PDAP);
     GPIO_WritePinOutput(BOARD_GPIO_LED0_CONFIG->base,
-            BOARD_GPIO_LED0_CONFIG->pin, on ? gpioPinSet : gpioPinClear);
+            BOARD_GPIO_LED0_CONFIG->pin, onLed0 ? gpioPinSet : gpioPinClear);
     RDC_SEMAPHORE_Unlock(BOARD_GPIO_LED0_RDC_PDAP);
 #else
     PRINTF("%c ", on ? '+' : '-');
 #endif
-    on = !on;
+    onLed0 = !onLed0;
 }
 
 static bool onled1 = 1;
