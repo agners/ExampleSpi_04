@@ -133,6 +133,8 @@ void ToggleTask(void *pvParameters)
 	int len;
 	void *tx_buf;
 	char str_buffer[256];
+	int samples[8] = { 1234567, 7654321, 2345678, 8765432,
+			   3456789, 9876543, 4567890, 987654 };
 	uint32_t sequence = 0;
 	unsigned long size;
 
@@ -160,8 +162,10 @@ void ToggleTask(void *pvParameters)
 
 		GPIO_Ctrl_ToggleLed0();
 		sequence++;
-		len = snprintf(str_buffer, sizeof(str_buffer), "%lu,%d,%d\n",
-			 sequence, 1234, 4321);
+		len = snprintf(str_buffer, sizeof(str_buffer),
+				"%lu,%d,%d,%d,%d,%d,%d,%d,%d\n",
+				sequence, samples[0], samples[1], samples[2],
+				samples[3], samples[4], samples[5], samples[6]);
 
 		tx_buf = rpmsg_rtos_alloc_tx_buffer(app_chnl->rp_ept, &size);
 		if(tx_buf == NULL)
