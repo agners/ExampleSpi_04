@@ -46,10 +46,8 @@ void hardware_init(void)
     /* In this demo, we need to access RDC SEMAPHORE1 on this board */
     RDC_SetPdapAccess(RDC, rdcPdapSemaphore1, 0xFF, false, false);
 
-    /* In this demo, we need to share board GPIO, we can set sreq argument to true
-     * when the peer core could also access GPIO with RDC_SEMAPHORE, or the peer
-     * core doesn't access the GPIO at all */
-    RDC_SetPdapAccess(RDC, BOARD_GPIO_KEY_RDC_PDAP, 0xFF, false/*true*/, false);
+    /* Ask for GPIO2 exclusively too */
+    RDC_SetPdapAccess(RDC, BOARD_GPIO_KEY_RDC_PDAP, 3 << (BOARD_DOMAIN_ID * 2), false/*true*/, false);
 
     /* RDC MU*/
     RDC_SetPdapAccess(RDC, BOARD_MU_RDC_PDAP, 3 << (BOARD_DOMAIN_ID * 2), false, false);

@@ -159,18 +159,15 @@ void GPIO_Ctrl_ToggleLed2()
 void BOARD_GPIO_KEY_HANDLER()
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    /* When user input captured, we disable GPIO interrupt */
-    NVIC_DisableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
-    RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
-    /* Disable GPIO pin interrupt */
-    GPIO_SetPinIntMode(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin, false);
-    /* Clear the interrupt state */
-    GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
-    RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
+
     /* Unlock the task to process the event. */
     xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
+
     /* Perform a context switch to wake the higher priority task. */
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+    /* Clear the interrupt state */
+    GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
 }
 #endif
 

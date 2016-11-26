@@ -181,14 +181,6 @@ void ToggleTask(void *pvParameters)
 		}
 		assert(result == 0);
 
-
-		RDC_SEMAPHORE_Lock(BOARD_GPIO_KEY_RDC_PDAP);
-		GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
-		GPIO_SetPinIntMode(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin, true);
-		GPIO_ClearStatusFlag(BOARD_GPIO_KEY_CONFIG->base, BOARD_GPIO_KEY_CONFIG->pin);
-		NVIC_EnableIRQ(BOARD_GPIO_KEY_IRQ_NUM);
-		RDC_SEMAPHORE_Unlock(BOARD_GPIO_KEY_RDC_PDAP);
-
 		GPIO_Ctrl_ToggleLed0();
 	}
 }
